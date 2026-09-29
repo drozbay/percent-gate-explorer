@@ -33,8 +33,11 @@ ap.add_argument("--verify-pairs", type=int, default=300)
 ARGS = ap.parse_args()
 
 TREE = os.getcwd()
-sys.argv = [sys.argv[0], "--cpu"]          # comfy parses sys.argv at import; never touch the GPU
+sys.argv = [sys.argv[0], "--cpu"]          # never touch the GPU
 sys.path.insert(0, TREE)
+
+import comfy.options
+comfy.options.enable_args_parsing()         # without this ComfyUI ignores the command line
 
 import logging
 logging.disable(logging.CRITICAL)
@@ -721,6 +724,9 @@ def selfcheck():
 
 
 if __name__ == "__main__":
+    import comfy.model_management
+    if comfy.model_management.get_torch_device().type != "cpu":
+        sys.exit("expected ComfyUI to run on the CPU")
     models, cfgs = all_configs()
     if ARGS.list_configs:
         print(json.dumps({"configs": {k: list(v) for k, v in cfgs.items()}, "models": models}))
