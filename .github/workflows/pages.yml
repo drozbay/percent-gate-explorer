@@ -1,0 +1,72 @@
+name: Build and publish
+
+# Builds the page from two pinned ComfyUI commits and publishes it to GitHub Pages.
+# The run log is the public record of how the page was produced.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  COMFY_REPO: Comfy-Org/ComfyUI
+  PR_NUMBER: "16156"
+  PR_SHA: b29b3230defe9687fde5ece9eb53c38944925894
+  BASE_SHA: 1568e6cfd04586a4b3c4e1817ea7dde09b1bf9e7
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch both ComfyUI commits
+        run: |
+          git clone --filter=blob:none "https://github.com/${COMFY_REPO}" comfyui
+          git -C comfyui fetch origin "pull/${PR_NUMBER}/head"
+          python prepare_trees.py --repo comfyui --pr-sha "$PR_SHA" --base-sha "$BASE_SHA"
+
+      - name: Install ComfyUI requirements (CPU)
+        run: |
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install -r trees/pr/requirements.txt
+
+      - name: Check that every adapter can observe both states
+        run: |
+          for side in master pr; do
+            (cd "trees/$side" && python ../../gate_harness.py --out "../../out/$side" --label "$side" --selfcheck)
+          done
+
+      - name: Measure both trees and build the page
+        run: |
+          python build_site.py --jobs 4 \
+            --repo "$COMFY_REPO" --pr-number "$PR_NUMBER" \
+            --tool-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --build-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

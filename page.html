@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Percent Gate Explorer</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --active: #2a78d6; --differs: #eb6834; --track: #ecebe6; --band: rgba(42,120,214,0.12);
+  --code: #f1f0ec;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --active: #3987e5; --differs: #d95926; --track: #2a2a28; --band: rgba(57,135,229,0.18);
+    --code: #242422;
+  }
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --active: #3987e5; --differs: #d95926; --track: #2a2a28; --band: rgba(57,135,229,0.18);
+  --code: #242422;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1320px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; font-weight: 650; }
+h2 { font-size: 15px; margin: 0 0 10px; font-weight: 650; }
+p { margin: 0 0 8px; }
+a { color: inherit; text-decoration-color: var(--axis); text-underline-offset: 2px; }
+.lede { color: var(--ink-2); max-width: 78ch; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-top: 16px; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12.5px; }
+.chip { display: inline-block; padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; color: var(--ink-2); background: var(--surface); }
+
+.filters { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: end; }
+.filters .break { flex-basis: 100%; height: 0; }
+.filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-2); }
+.filters select, .filters input[type=number] { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; min-height: 32px; }
+.filters input[type=number] { width: 86px; }
+.filters input[type=range] { width: 150px; accent-color: var(--active); }
+.pair { display: flex; gap: 8px; align-items: center; }
+.check { flex-direction: row !important; align-items: center; gap: 6px !important; min-height: 32px; }
+.examples { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; font-size: 12px; color: var(--ink-2); }
+.examples button { font: inherit; font-size: 12px; color: var(--ink); background: transparent; border: 1px solid var(--axis); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.examples button:hover { background: var(--track); }
+
+.ruler { position: relative; height: 54px; margin: 6px 0 2px; }
+.ruler .line { position: absolute; left: 0; right: 0; top: 26px; height: 1px; background: var(--axis); }
+.ruler .band { position: absolute; top: 12px; height: 28px; background: var(--band); border-left: 2px solid var(--active); border-right: 2px solid var(--active); }
+.ruler .tick { position: absolute; top: 20px; width: 2px; height: 12px; background: var(--ink-2); transform: translateX(-1px); }
+.ruler .tick.on { background: var(--differs); height: 16px; top: 18px; }
+.ruler .num { position: absolute; top: 0; font-size: 10.5px; color: var(--muted); transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+.ruler .pct { position: absolute; top: 40px; font-size: 10.5px; color: var(--muted); transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: var(--ink-2); margin-top: 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 12px; border-radius: 3px; display: inline-block; }
+.sw.a { background: var(--active); } .sw.i { background: var(--track); } .sw.n { border: 1px solid var(--axis); }
+.sw.d { height: 3px; background: var(--differs); border-radius: 2px; }
+.sw.t { width: 2px; height: 14px; background: var(--differs); border-radius: 0; }
+
+.matrix { display: grid; grid-template-columns: minmax(170px, 250px) minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; row-gap: 0; align-items: center; }
+.matrix .head { font-size: 15px; font-weight: 650; padding-bottom: 2px; }
+.narrowsum { display: none; font-size: 15px; font-weight: 650; margin-bottom: 8px; }
+.matrix .head small { font-weight: 400; color: var(--ink-2); }
+.rowlabel { font-size: 12.5px; padding: 3px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 0; background: transparent; color: var(--ink); font-family: inherit; text-align: left; width: 100%; }
+.rowlabel:hover, .rowlabel.pinned { background: var(--track); }
+.rowlabel .flag { color: var(--ink-2); font-size: 11.5px; margin-left: 6px; }
+.panelrow { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 10px; align-items: center; padding: 3px 0 7px; }
+.strip { display: flex; gap: 2px; height: 18px; }
+.strip.dense { gap: 1px; }
+.cell { flex: 1 1 0; max-width: 30px; min-width: 0; background: var(--track); border-radius: 3px; position: relative; }
+.cell.on { background: var(--active); }
+.cell.nc { background: transparent; border: 1px solid var(--axis); }
+.cell.diff::after { content: ""; position: absolute; left: 0; right: 0; bottom: -5px; height: 3px; border-radius: 2px; background: var(--differs); }
+.cell:hover { filter: brightness(1.15); outline: 2px solid var(--ink); outline-offset: 1px; }
+.sum { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axisrow { display: flex; gap: 2px; height: 14px; }
+.axisrow.dense { gap: 1px; }
+.axisrow span { flex: 1 1 0; max-width: 30px; min-width: 0; font-size: 10px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; overflow: visible; white-space: nowrap; }
+.na { font-size: 12px; color: var(--muted); height: 18px; line-height: 18px; }
+.sidetag { display: none; font-size: 11px; color: var(--muted); }
+@media (max-width: 860px) {
+  .matrix { grid-template-columns: minmax(0, 1fr); }
+  .matrix .head { display: none; }
+  .narrowsum { display: block; }
+  .sidetag { display: block; }
+}
+
+.src { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 860px) { .src { grid-template-columns: 1fr; } }
+.src pre { margin: 6px 0 4px; padding: 10px 12px; background: var(--code); border-radius: 8px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12.5px; }
+.src .where { font-size: 12px; color: var(--ink-2); }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 14px; font-size: 12.5px; margin-top: 8px; }
+.kv dt { color: var(--ink-2); } .kv dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: 5px 10px 5px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--ink-2); font-weight: 600; }
+td.num { font-variant-numeric: tabular-nums; }
+details > summary { cursor: pointer; font-weight: 650; font-size: 14px; }
+ul.facts { margin: 8px 0 0; padding-left: 18px; } ul.facts li { margin: 3px 0; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 12px 0 4px; }
+@media (max-width: 860px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stats div { border-left: 2px solid var(--grid); padding-left: 10px; }
+.stats b { display: block; font-size: 18px; font-weight: 650; } .stats span { font-size: 12px; color: var(--ink-2); }
+
+#tip { position: fixed; z-index: 10; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(0,0,0,0.18); border-radius: 8px; padding: 10px 12px; font-size: 12px; max-width: 460px; display: none; }
+#tip .t1 { font-weight: 650; font-size: 13px; } #tip .t2 { color: var(--ink-2); margin-bottom: 6px; }
+#tip dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 1px 10px; margin: 0; }
+#tip dt { color: var(--ink-2); } #tip dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+#tip pre { margin: 6px 0 0; padding: 6px 8px; background: var(--code); border-radius: 6px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11.5px; }
+.msg { color: var(--ink-2); padding: 12px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Which steps do start_percent and end_percent select?</h1>
+  <p class="lede">Pick a node and a schedule. The left side shows what ComfyUI master does, the right side shows
+    <a id="prlink" href="#">the pull request</a>. Every result was produced by running ComfyUI's own code from
+    the two commits below. Nothing is reimplemented in this page.</p>
+  <p><span class="chip">master <a id="c_master" class="mono" href="#"></a></span>
+     <span class="chip">PR <a id="c_pr" class="mono" href="#"></a></span>
+     <span class="chip" id="gen"></span></p>
+
+  <section class="card" aria-label="Settings">
+    <div class="filters">
+      <label>Model<select id="model"></select></label>
+      <label>Shift<select id="shift"></select></label>
+      <label>Scheduler<select id="sched"></select></label>
+      <label>Steps<span class="pair"><input id="steps" type="number" min="1" step="1"><input id="steps_r" type="range" min="1" step="1" aria-label="Steps"></span></label>
+      <div class="break"></div>
+      <label>start_percent<span class="pair"><input id="start" type="number" min="0" max="1" step="0.001"><input id="start_r" type="range" min="0" max="1000" step="1" aria-label="start_percent"></span></label>
+      <label>end_percent<span class="pair"><input id="end" type="number" min="0" max="1" step="0.001"><input id="end_r" type="range" min="0" max="1000" step="1" aria-label="end_percent"></span></label>
+      <div class="break"></div>
+      <label class="check"><input id="allnodes" type="checkbox"> Only nodes used with this model</label>
+      <label>Theme<select id="theme"><option value="auto">auto</option><option value="light">light</option><option value="dark">dark</option></select></label>
+    </div>
+    <div class="examples" id="examples">Try:</div>
+  </section>
+
+  <section class="card">
+    <h2>Where the steps sit in the schedule</h2>
+    <div class="ruler" id="ruler"></div>
+    <div class="legend">
+      <span><i class="sw t"></i> tick that sits exactly on start or end</span>
+      <span><i class="sw" style="background:var(--band);border-left:2px solid var(--active);border-right:2px solid var(--active)"></i> start to end window</span>
+      <span>Each number marks where that step ends.</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Active steps per node</h2>
+    <div id="matrixwrap"></div>
+    <div class="legend">
+      <span><i class="sw a"></i> active</span>
+      <span><i class="sw i"></i> inactive</span>
+      <span><i class="sw d"></i> master and PR differ on this step</span>
+    </div>
+  </section>
+
+  <section class="card" id="detail"></section>
+
+  <section class="card">
+    <details>
+      <summary>Table view</summary>
+      <div id="tablewrap" style="margin-top:10px"></div>
+    </details>
+  </section>
+
+  <section class="card" id="prov"></section>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const META = /*__META__*/null;
+const PGE = { cache: {}, waiting: {} };
+PGE.data = function (id, d) { PGE.cache[id] = decode(d); if (PGE.waiting[id]) { PGE.waiting[id].forEach(f => f(PGE.cache[id])); delete PGE.waiting[id]; } };
+const PG = 1000;
+
+function bytes(b64) { const s = atob(b64); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; }
+function decode(d) {
+  d.sigmas = new Float32Array(bytes(d.sig));
+  d.schedules = {}; for (const k in d.sched) d.schedules[k] = new Uint16Array(bytes(d.sched[k]));
+  for (const side in d.sides) {
+    const S = d.sides[side];
+    S.bound = new Float64Array(bytes(S.bounds));
+    S.k = S.classes.map(c => new Uint16Array(bytes(c)));
+  }
+  return d;
+}
+</script>
+<script>/*__INLINE_DATA__*/</script>
+<script>
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+const SIDES = ["master", "pr"];
+const SIDE_NAME = { master: "master", pr: "PR #" + META.pr_number };
+const blob = (side, src) => `https://github.com/${META.repo}/blob/${META.commits[side]}/${src.file}#L${src.line}`;
+const commitUrl = side => `https://github.com/${META.repo}/commit/${META.commits[side]}`;
+
+const state = { model: "MiniMaxH3", shift: null, sched: "simple", steps: 8, start: 250, end: 875, all: true, pin: null, theme: "auto" };
+
+function loadConfig(id) {
+  return new Promise((resolve, reject) => {
+    if (PGE.cache[id]) return resolve(PGE.cache[id]);
+    (PGE.waiting[id] = PGE.waiting[id] || []).push(resolve);
+    if (PGE.waiting[id].length > 1) return;
+    const s = document.createElement("script");
+    s.src = "data/" + id + ".js";
+    s.onerror = () => reject(new Error("could not load data/" + id + ".js"));
+    document.head.appendChild(s);
+  });
+}
+
+const modelOf = name => META.models.find(m => m.name === name);
+const configFor = (family, shift) => META.configs.find(c => c.family === family && c.shift === shift);
+const shiftsFor = family => META.configs.filter(c => c.family === family).map(c => c.shift).sort((a, b) => a - b);
+
+function relevant(site, model) {
+  if (state.all) return true;
+  return site.native.some(t => {
+    if (t === "*") return true;
+    if (t === "eps") return model.family === "eps";
+    if (t === "flow") return model.family.startsWith("flow") || model.family === "sensenova";
+    if (t === "flux") return model.family === "flux";
+    return model.name.toLowerCase().startsWith(t.toLowerCase());
+  });
+}
+
+function scheduleIdx(cfg, sched, steps) {
+  const flat = cfg.schedules[sched];
+  if (!flat) return null;
+  const off = (steps - 1) * (steps + 2) / 2;
+  const idx = flat.subarray(off, off + steps + 1);
+  return idx[0] === 65534 ? null : idx;
+}
+
+// the verdicts measured from the node: index below k_start means the start bound lets the sigma in,
+// index at or above k_end means the end bound lets it in
+function verdict(cfg, side, site, j) {
+  const S = cfg.sides[side], ci = S.site_class[site.id];
+  if (ci < 0) return null;
+  if (site.requires_end_gt_start && state.end <= state.start) return false;
+  const k = S.k[ci];
+  return j < k[state.start] && j >= k[PG + 1 + state.end];
+}
+
+function rowFor(cfg, side, site, idx) {
+  const S = cfg.sides[side];
+  if (S.site_class[site.id] < 0) return { error: S.errors[site.id] || "not available" };
+  const cells = [];
+  for (let i = 0; i < state.steps; i++) {
+    const j = site.sigma_source === "next" ? idx[i + 1] : idx[i];
+    if (j === 65535) cells.push({ nc: true, j: -1 });
+    else cells.push({ on: verdict(cfg, side, site, j), j });
+  }
+  let key = "";
+  for (let i = 0; i < state.steps; i++) key += verdict(cfg, side, site, idx[i]) ? "1" : "0";
+  return { cells, key };
+}
+
+function ranges(cells) {
+  const out = []; let a = -1;
+  for (let i = 0; i <= cells.length; i++) {
+    const on = i < cells.length && cells[i].on;
+    if (on && a < 0) a = i;
+    if (!on && a >= 0) { out.push(a + 1 === i ? String(i) : (a + 1) + "–" + i); a = -1; }
+  }
+  return out.length ? out.join(", ") : "none";
+}
+const countOn = cells => cells.filter(c => c.on).length;
+
+function stepPos(cfg, sigma) {
+  const b = cfg.sides.pr.bound;
+  let lo = 0, hi = PG;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (b[m] <= sigma) hi = m; else lo = m + 1; }
+  if (b[lo] === sigma) return { pos: lo / PG, exact: lo };
+  if (lo === 0) return { pos: 0, exact: -1 };
+  const hiB = Math.min(b[lo - 1], 1e6), f = (hiB - sigma) / (hiB - b[lo]);
+  return { pos: (lo - 1 + Math.min(1, Math.max(0, f))) / PG, exact: -1 };
+}
+
+const fmtPct = p => (p / PG).toFixed(3).replace(/0+$/, "").replace(/\.$/, "") || "0";
+const fmtNum = v => String(v);
+
+let seq = 0;
+async function render() {
+  const my = ++seq;
+  const model = modelOf(state.model);
+  const shifts = shiftsFor(model.family);
+  if (!shifts.includes(state.shift)) state.shift = model.shift;
+  const cmeta = configFor(model.family, state.shift);
+  syncControls(model, shifts, cmeta);
+  writeHash();
+  const wrap = $("matrixwrap");
+  wrap.style.opacity = "0.5";
+  let cfg;
+  try { cfg = await loadConfig(cmeta.id); } catch (e) { wrap.style.opacity = "1"; wrap.replaceChildren(el("div", "msg", String(e.message))); return; }
+  if (my !== seq) return;
+  wrap.style.opacity = "1";
+  const idx = scheduleIdx(cfg, state.sched, state.steps);
+  if (!idx) {
+    const m = "The " + state.sched + " scheduler does not produce a schedule for " + state.steps + " steps on this model sampling.";
+    wrap.replaceChildren(el("div", "msg", m)); $("ruler").replaceChildren(); $("tablewrap").replaceChildren(); $("detail").replaceChildren();
+    return;
+  }
+  const sites = META.sites.filter(s => relevant(s, model));
+  const rows = sites.map(site => ({ site, master: rowFor(cfg, "master", site, idx), pr: rowFor(cfg, "pr", site, idx) }));
+  if (!state.pin || !sites.some(s => s.id === state.pin)) state.pin = sites[0].id;
+  drawRuler(cfg, idx);
+  drawMatrix(cfg, idx, rows);
+  drawTable(rows);
+  drawDetail(cfg, idx, rows.find(r => r.site.id === state.pin));
+}
+
+function answers(rows, side) {
+  const n = new Set(rows.filter(r => !r[side].error).map(r => r[side].key)).size;
+  return n + (n === 1 ? " answer" : " answers");
+}
+
+function drawRuler(cfg, idx) {
+  const r = $("ruler"); r.replaceChildren();
+  r.appendChild(el("div", "line"));
+  const a = Math.min(state.start, state.end), b = Math.max(state.start, state.end);
+  if (state.end > state.start) {
+    const band = el("div", "band"); band.style.left = (a / 10) + "%"; band.style.width = ((b - a) / 10) + "%"; r.appendChild(band);
+  }
+  // each step runs from its own sigma to where the next step starts (the last one ends at 1); its number sits on the tick where it ends
+  const every = state.steps <= 20 ? 1 : 5;
+  const P = [], width = r.clientWidth || 1000;
+  for (let i = 0; i < state.steps; i++) P.push(stepPos(cfg, cfg.sigmas[idx[i]]));
+  for (let i = 0; i < state.steps; i++) {
+    const from = P[i].pos, to = i + 1 < state.steps ? P[i + 1].pos : 1;
+    const t = el("div", "tick" + ((P[i].exact === state.start || P[i].exact === state.end) ? " on" : ""));
+    t.style.left = (from * 100) + "%"; r.appendChild(t);
+    const fits = (to - from) * width >= 16;      // a label only goes on a span wide enough to hold it
+    if (fits && (i === 0 || (i + 1) % every === 0)) { const n = el("div", "num", String(i + 1)); n.style.left = (to * 100) + "%"; r.appendChild(n); }
+  }
+  const last = el("div", "tick"); last.style.left = "100%"; r.appendChild(last);
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) { const n = el("div", "pct", String(v)); n.style.left = (v * 100) + "%"; r.appendChild(n); }
+}
+
+function axisRow() {
+  const ax = el("div", "axisrow" + (state.steps > 30 ? " dense" : ""));
+  const every = state.steps <= 12 ? 1 : state.steps <= 25 ? 2 : 5;
+  for (let i = 1; i <= state.steps; i++) ax.appendChild(el("span", "", (i === 1 || i % every === 0) ? String(i) : ""));
+  return ax;
+}
+
+function drawMatrix(cfg, idx, rows) {
+  const m = el("div", "matrix");
+  m.appendChild(el("div", "head", "Node"));
+  const narrow = el("div", "narrowsum", SIDES.map(side => SIDE_NAME[side] + " (" + answers(rows, side) + ")").join(", "));
+  for (const side of SIDES) {
+    const h = el("div", "head"); h.appendChild(document.createTextNode(SIDE_NAME[side] + " (" + answers(rows, side) + ") "));
+    h.appendChild(el("small", "", META.commits[side].slice(0, 7)));
+    const pr = el("div", "panelrow"); pr.style.padding = "4px 0 0"; pr.appendChild(axisRow()); pr.appendChild(el("div", "sum", "steps"));
+    h.appendChild(pr); m.appendChild(h);
+  }
+  for (const row of rows) {
+    const differs = !row.master.error && !row.pr.error && row.master.cells.some((c, i) => !!c.on !== !!row.pr.cells[i].on);
+    const lab = el("button", "rowlabel" + (row.site.id === state.pin ? " pinned" : ""));
+    lab.type = "button";
+    lab.appendChild(document.createTextNode(row.site.label));
+    if (differs) lab.appendChild(el("span", "flag", "differs"));
+    lab.title = row.site.label + (row.site.note ? ". " + row.site.note : "");
+    lab.addEventListener("click", () => { state.pin = row.site.id; render(); });
+    m.appendChild(lab);
+    for (const side of SIDES) {
+      const r = row[side], other = row[side === "master" ? "pr" : "master"];
+      const cellw = el("div");
+      cellw.appendChild(el("div", "sidetag", SIDE_NAME[side]));
+      const pr = el("div", "panelrow");
+      if (r.error) {
+        const na = el("div", "na", "not available"); na.title = r.error; pr.appendChild(na); pr.appendChild(el("div", "sum", ""));
+      } else {
+        const strip = el("div", "strip" + (state.steps > 30 ? " dense" : ""));
+        r.cells.forEach((c, i) => {
+          const d = !other.error && !!c.on !== !!other.cells[i].on;
+          const e = el("div", "cell" + (c.nc ? " nc" : c.on ? " on" : "") + (d ? " diff" : ""));
+          e.addEventListener("pointermove", ev => showTip(ev, cfg, idx, row, side, i));
+          e.addEventListener("pointerleave", hideTip);
+          strip.appendChild(e);
+        });
+        pr.appendChild(strip);
+        const n = countOn(r.cells);
+        pr.appendChild(el("div", "sum", ranges(r.cells) + (n ? "  (" + n + ")" : "")));
+      }
+      cellw.appendChild(pr); m.appendChild(cellw);
+    }
+  }
+  $("matrixwrap").replaceChildren(narrow, m);
+}
+
+function drawTable(rows) {
+  const t = el("table"), hr = el("tr");
+  for (const h of ["Node", "master, active steps", SIDE_NAME.pr + ", active steps", "Same"]) hr.appendChild(el("th", "", h));
+  t.appendChild(hr);
+  for (const row of rows) {
+    const tr = el("tr"); tr.appendChild(el("td", "", row.site.label));
+    const txt = SIDES.map(s => row[s].error ? "not available" : ranges(row[s].cells));
+    tr.appendChild(el("td", "num", txt[0])); tr.appendChild(el("td", "num", txt[1]));
+    tr.appendChild(el("td", "", (row.master.error || row.pr.error) ? "" : (txt[0] === txt[1] ? "yes" : "no")));
+    t.appendChild(tr);
+  }
+  $("tablewrap").replaceChildren(t);
+}
+
+function drawDetail(cfg, idx, row) {
+  const onBound = [];
+  for (let i = 0; i < state.steps; i++) {
+    const p = stepPos(cfg, cfg.sigmas[idx[i]]);
+    if (p.exact === state.start || p.exact === state.end) onBound.push([i + 1, cfg.sigmas[idx[i]], p.exact === state.start ? "start" : "end"]);
+  }
+  const d = $("detail"); d.replaceChildren();
+  d.appendChild(el("h2", "", row.site.label + ": the comparison that decides it"));
+  if (row.site.note) d.appendChild(el("p", "lede", row.site.note));
+  const g = el("div", "src");
+  for (const side of SIDES) {
+    const b = el("div"), src = row.site.source[side];
+    b.appendChild(el("div", "head", SIDE_NAME[side]));
+    b.appendChild(el("pre", "", src.text));
+    const w = el("div", "where"), a = el("a", "mono", src.file + ":" + src.line); a.href = blob(side, src); a.target = "_blank"; a.rel = "noopener";
+    w.appendChild(a); b.appendChild(w);
+    const S = cfg.sides[side], kv = el("dl", "kv");
+    kv.appendChild(el("dt", "", "percent_to_sigma(" + fmtPct(state.start) + ")")); kv.appendChild(el("dd", "", fmtNum(S.bound[state.start])));
+    kv.appendChild(el("dt", "", "percent_to_sigma(" + fmtPct(state.end) + ")")); kv.appendChild(el("dd", "", fmtNum(S.bound[state.end])));
+    for (const [n, sg, which] of onBound) { kv.appendChild(el("dt", "", "sigma of step " + n + ", at " + which)); kv.appendChild(el("dd", "", fmtNum(sg))); }
+    b.appendChild(kv);
+    if (row[side].error) b.appendChild(el("p", "where", row[side].error));
+    g.appendChild(b);
+  }
+  d.appendChild(g);
+  d.appendChild(el("p", "where", "Click a node name in the grid to show its comparison here. Step sigmas are float32. Hover a step to see its value next to these bounds."));
+}
+
+function showTip(ev, cfg, idx, row, side, i) {
+  const t = $("tip"), c = row[side].cells[i], site = row.site, S = cfg.sides[side];
+  t.replaceChildren();
+  t.appendChild(el("div", "t1", c.nc ? "not consulted" : c.on ? "active" : "inactive"));
+  t.appendChild(el("div", "t2", site.label + " · " + SIDE_NAME[side] + " · step " + (i + 1) + " of " + state.steps));
+  const dl = el("dl");
+  const add = (k, v) => { dl.appendChild(el("dt", "", k)); dl.appendChild(el("dd", "", v)); };
+  add("step sigma", fmtNum(cfg.sigmas[idx[i]]));
+  if (site.sigma_source === "next") add("decided at", c.nc ? "final step, no noise decision" : "sigma of step " + (i + 2) + ": " + fmtNum(cfg.sigmas[c.j]));
+  add("start bound", fmtNum(S.bound[state.start]));
+  add("end bound", fmtNum(S.bound[state.end]));
+  t.appendChild(dl);
+  t.appendChild(el("pre", "", site.source[side].text));
+  t.style.display = "block";
+  const w = t.offsetWidth, h = t.offsetHeight;
+  let x = ev.clientX + 14, y = ev.clientY + 16;
+  if (x + w > innerWidth - 8) x = Math.max(8, ev.clientX - w - 14);
+  if (y + h > innerHeight - 8) y = Math.max(8, ev.clientY - h - 16);
+  t.style.left = x + "px"; t.style.top = y + "px";
+}
+function hideTip() { $("tip").style.display = "none"; }
+
+function syncControls(model, shifts, cmeta) {
+  $("model").value = state.model;
+  const sh = $("shift"); sh.replaceChildren();
+  for (const s of shifts) { const o = el("option", "", model.family === "eps" ? "n/a" : s + (s === model.shift ? " (model default)" : "")); o.value = String(s); sh.appendChild(o); }
+  sh.value = String(state.shift); sh.disabled = model.family === "eps";
+  const sc = $("sched"); sc.replaceChildren();
+  for (const s of META.schedulers) { if (!cmeta.schedulers.includes(s)) continue; const o = el("option", "", s); o.value = s; sc.appendChild(o); }
+  if (!cmeta.schedulers.includes(state.sched)) state.sched = cmeta.schedulers[0];
+  sc.value = state.sched;
+  $("steps").value = state.steps; $("steps_r").value = state.steps;
+  $("start").value = fmtPct(state.start); $("start_r").value = state.start;
+  $("end").value = fmtPct(state.end); $("end_r").value = state.end;
+  $("allnodes").checked = !state.all;
+  $("theme").value = state.theme;
+  if (state.theme === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", state.theme);
+}
+
+function writeHash() {
+  const h = new URLSearchParams({ model: state.model, shift: state.shift, sched: state.sched, steps: state.steps, start: fmtPct(state.start), end: fmtPct(state.end) });
+  if (!state.all) h.set("only", "1");
+  if (state.theme !== "auto") h.set("theme", state.theme);
+  try { history.replaceState(null, "", "#" + h.toString()); } catch (e) {}
+}
+function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get("model") && modelOf(h.get("model"))) state.model = h.get("model");
+  if (h.get("shift")) state.shift = parseFloat(h.get("shift"));
+  if (h.get("sched")) state.sched = h.get("sched");
+  if (h.get("steps")) state.steps = clampInt(h.get("steps"), 1, META.max_steps);
+  if (h.get("start")) state.start = clampInt(Math.round(parseFloat(h.get("start")) * PG), 0, PG);
+  if (h.get("end")) state.end = clampInt(Math.round(parseFloat(h.get("end")) * PG), 0, PG);
+  state.all = h.get("only") !== "1";
+  if (["light", "dark", "auto"].includes(h.get("theme"))) state.theme = h.get("theme");
+}
+const clampInt = (v, a, b) => { v = Math.round(Number(v)); return isFinite(v) ? Math.min(b, Math.max(a, v)) : a; };
+
+function init() {
+  $("prlink").href = `https://github.com/${META.repo}/pull/${META.pr_number}`;
+  for (const s of SIDES) { const a = $("c_" + s); a.textContent = META.commits[s].slice(0, 10); a.href = commitUrl(s); }
+  $("gen").textContent = "generated " + META.generated;
+  const ms = $("model");
+  for (const m of [...META.models].sort((a, b) => a.name.localeCompare(b.name))) { const o = el("option", "", m.name); o.value = m.name; ms.appendChild(o); }
+  $("steps").max = META.max_steps; $("steps_r").max = META.max_steps;
+  if (!modelOf(state.model)) state.model = META.models[0].name;
+  readHash();
+
+  ms.addEventListener("change", () => { state.model = ms.value; state.shift = modelOf(ms.value).shift; render(); });
+  $("shift").addEventListener("change", e => { state.shift = parseFloat(e.target.value); render(); });
+  $("sched").addEventListener("change", e => { state.sched = e.target.value; render(); });
+  $("allnodes").addEventListener("change", e => { state.all = !e.target.checked; render(); });
+  $("theme").addEventListener("change", e => { state.theme = e.target.value; render(); });
+  const bind = (num, rng, key, toState) => {
+    $(num).addEventListener("change", e => { state[key] = toState(e.target.value); render(); });
+    $(rng).addEventListener("input", e => { state[key] = clampInt(e.target.value, Number(e.target.min), Number(e.target.max)); render(); });
+  };
+  bind("steps", "steps_r", "steps", v => clampInt(v, 1, META.max_steps));
+  bind("start", "start_r", "start", v => clampInt(parseFloat(v) * PG, 0, PG));
+  bind("end", "end_r", "end", v => clampInt(parseFloat(v) * PG, 0, PG));
+
+  const ex = [
+    ["Wan, 8 steps, start 0.5", { model: "WAN21_T2V", sched: "simple", steps: 8, start: 500, end: 1000 }],
+    ["Wan, 20 steps, end 0.95", { model: "WAN21_T2V", sched: "simple", steps: 20, start: 0, end: 950 }],
+    ["MiniMax H3, 10 steps, start 0.2", { model: "MiniMaxH3", sched: "simple", steps: 10, start: 200, end: 1000 }],
+    ["LTX, 8 steps, 0.25 to 0.375", { model: "LTXV", sched: "simple", steps: 8, start: 250, end: 375 }],
+    ["SDXL, 20 steps, 0.2 to 0.8", { model: "SDXL", sched: "normal", steps: 20, start: 200, end: 800 }],
+    ["Full range, 0 to 1", { model: "WAN21_T2V", sched: "simple", steps: 8, start: 0, end: 1000 }],
+  ];
+  for (const [name, s] of ex) {
+    if (!modelOf(s.model)) continue;
+    const b = el("button", "", name); b.type = "button";
+    b.addEventListener("click", () => { Object.assign(state, s, { shift: modelOf(s.model).shift }); render(); });
+    $("examples").appendChild(b);
+  }
+  drawProv();
+  addEventListener("hashchange", () => { readHash(); render(); });
+  render();
+}
+
+function drawProv() {
+  const p = $("prov"); p.replaceChildren();
+  p.appendChild(el("h2", "", "How these results were produced"));
+  const T = META.totals, n = v => v.toLocaleString("en-US");
+  const st = el("div", "stats");
+  const stat = (v, k) => { const d = el("div"); d.appendChild(el("b", "", v)); d.appendChild(el("span", "", k)); st.appendChild(d); };
+  stat(n(T.master.node_runs + T.pr.node_runs), "times a real node was set up");
+  stat(n(T.master.gate_calls + T.pr.gate_calls), "times a real gate was called");
+  stat(n(T.master.verified + T.pr.verified), "spot checks of this page against the node");
+  stat("0", "spot checks that disagreed");
+  p.appendChild(st);
+  const ul = el("ul", "facts");
+  const li = (...parts) => { const l = el("li"); for (const x of parts) l.appendChild(typeof x === "string" ? document.createTextNode(x) : x); ul.appendChild(l); };
+  const link = (text, href, mono) => { const a = el("a", mono ? "mono" : "", text); a.href = href; a.target = "_blank"; a.rel = "noopener"; return a; };
+  li("One script ran twice, unchanged: once inside the source tree at ", link(META.commits.master.slice(0, 10), commitUrl("master"), true),
+     " and once inside the tree at ", link(META.commits.pr.slice(0, 10), commitUrl("pr"), true), ". Each run imported that tree's own comfy package.");
+  li("Step sigmas come from comfy.samplers.calculate_sigmas. Bounds come from the model sampling object's percent_to_sigma. Both trees returned identical step sigmas.");
+  li("Whether a node is active was decided by calling the node's own code with a float32 sigma and watching whether it acted, for example whether it made its extra model call.");
+  li("Percent inputs move in steps of 0.001, so all 1001 values were measured for start and for end, on every schedule up to " + META.max_steps + " steps.");
+  li("The spot checks set up each node again with a full start and end pair and compared its answer with the lookup this page uses.");
+  if (META.excluded.length) {
+    const groups = new Set(META.excluded.map(x => {
+      const [cid, side, sid] = x.split("/"), site = META.sites.find(s => s.id === sid), cfg = META.configs.find(c => c.id === cid);
+      return (site ? site.label : sid) + " on " + (cfg ? META.family_label[cfg.family] : cid) + ", " + SIDE_NAME[side] + " side";
+    }));
+    li("Left out because the lookup could not be verified there: " + [...groups].join("; ") + ".");
+  }
+  if (META.tool_url) li("Source of the script and this page: ", link(META.tool_url, META.tool_url));
+  if (META.build_url) li("Build log for this page: ", link(META.build_url, META.build_url));
+  li("Script sha256 ", el("code", "", META.harness_sha256.slice(0, 16)), ", torch " + META.torch + ", python " + META.python + ", generated " + META.generated + ".");
+  p.appendChild(ul);
+  p.appendChild(el("h2", "", "What this page does not model")).style.marginTop = "16px";
+  const ul2 = el("ul", "facts");
+  for (const s of [
+    "It assumes one model call per step, at that step's sigma. Samplers that also evaluate between steps call the nodes at those sigmas too.",
+    "Hook keyframes and the SCAIL pose range use the same percent_to_sigma but are not shown.",
+    "It shows which steps a node is active on. It does not generate images.",
+  ]) ul2.appendChild(el("li", "", s));
+  p.appendChild(ul2);
+}
+
+init();
+</script>
+</body>
+</html>

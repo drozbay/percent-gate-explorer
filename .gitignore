@@ -1,0 +1,7 @@
+out/
+out_full/
+logs/
+trees/
+trees_full/
+site/
+__pycache__/
